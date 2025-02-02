@@ -11,14 +11,17 @@ const uint32_t camera_pin = 5;
 const uint32_t camera_off_flag = 6;
 bool camera_on = false;
 
-
 // ms between echo packets
 #define ECHO_INTERVAL 500
 uint32_t last_echo_time = 0;
 
+const uint32_t pyro_1_pin = 12;
+const uint32_t pyro_2_pin = 9;
 const uint32_t pyro_fire_time = 1000;
-uint32_t pyro_start_time; 
-bool pyro_is_firing = false;
+uint32_t pyro_1_start_time;
+uint32_t pyro_2_start_time;
+bool pyro_1_is_firing = false;
+bool pyro_2_is_firing = false;
 
 // save transmission states between loops
 int transmissionState = RADIOLIB_ERR_NONE;
@@ -45,8 +48,12 @@ int count;
 void setup() {
   Serial.begin(115200);
   Serial1.begin(115200);
-  pinMode(12, OUTPUT);
+  pinMode(pyro_1_pin, OUTPUT);
+  pinMode(pyro_2_pin, OUTPUT);
   pinMode(camera_pin, OUTPUT);
+  digitalWrite(pyro_1_pin, LOW);
+  digitalWrite(pyro_2_pin, LOW);
+  digitalWrite(camera_pin, LOW);
   // pinPeripheral(UART_PIN, PIO_SERCOM);
   // motorUart.begin(115200);
 
@@ -54,8 +61,6 @@ void setup() {
   // pinMode(UART_PIN, OUTPUT);
   delay(100);
   SPI.begin();
-  digitalWrite(12, LOW);
-  digitalWrite(camera_pin, LOW);
 
   for (int i = 0; i < NUM_DYNAMIXEL; ++i) {
     dynamixelMotor[i].init(dynamixelId[i], &dynamixelCommandQueue);
@@ -131,10 +136,10 @@ void handlePacket(RadioPacket* pkt) {
     if (allMatch) {
       Serial.print("Valid request for pyro ");
       Serial.println(read_val);
-      if (read_val == 12) {
-        digitalWrite(12, HIGH);
-        pyro_start_time = millis();
-        pyro_is_firing = true;
+      if (read_val == pyro_1_pin) {
+        digitalWrite(pyro_1_pin, HIGH);
+        pyro_1_start_time = millis();
+        pyro_1_is_firing = true;
       } else if (read_val == camera_pin) {
         digitalWrite(camera_pin, HIGH);
         camera_on = true;
@@ -151,8 +156,18 @@ void handlePacket(RadioPacket* pkt) {
 }
 
 void loop() {
-  if (pyro_is_firing && millis() - pyro_start_time > pyro_fire_time) {
-    digitalWrite(12, LOW);
+  if (pyro_1_is_firing && millis() - pyro_1_start_time > pyro_fire_time) {
+    digitalWrite(pyro_1_pin, LOW);
+  }
+  if (pyro_1_is_firing && millis() - pyro_1_start_time > 3000) {
+    digitalWrite(pyro_2_pin, HIGH);
+    pyro_1_is_firing = false;
+    pyro_2_is_firing = true;
+    pyro_2_start_time = millis();
+  }
+  if (pyro_2_is_firing && millis() - pyro_2_start_time > pyro_fire_time) {
+    digitalWrite(pyro_2_pin, LOW);
+    pyro_2_is_firing = false;
   }
 
   dynamixelCommandQueue.tick();

@@ -112,11 +112,24 @@ class MotorControl(QWidget):
         self.enable_motors_button = QPushButton()
         self.enable_motors_button.setText("Enable Live Control")
 
+        self.enable_pyro_control_button = QPushButton()
+        self.enable_pyro_control_button.setText("Enable pyro control")
+        self.pyro_enabled = False
+        self.pyro_fire_button = QPushButton()
+        self.pyro_fire_button.setText("Fire pyro! ")
+        self.pyro_fire_button.setDisabled(True)
+        self.pyro_fire_button.clicked.connect(self.start_pyro_countdown)
+        self.enable_pyro_control_button.clicked.connect(self.enable_pyro_control)
+
         self.enable_motors_button.clicked.connect(self.toggleMotorEnabled)
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.tick_enabled)  # Connect to the slot
         self.timer.start(100)  # Interval in milliseconds
+
+        self.pyro_activate_timer = QTimer(self)
+        self.pyro_activate_timer.setSingleShot(True)  # Ensures it runs only once
+        self.pyro_activate_timer.timeout.connect(self.activatePyro)
 
         layout = QGridLayout()
 
@@ -142,7 +155,8 @@ class MotorControl(QWidget):
         data_view_layout.addWidget(self.motor2ZeroButton, 11, 2)
         data_view_layout.addWidget(self.camera_button, 12, 1)
         data_view_layout.addWidget(self.camera_off_button, 12, 2)
-
+        data_view_layout.addWidget(self.enable_pyro_control_button, 13, 1)
+        data_view_layout.addWidget(self.pyro_fire_button, 13, 2)
         layout.addLayout(data_view_layout, 1, 1)
 
 
@@ -150,10 +164,30 @@ class MotorControl(QWidget):
 
         self.setMinimumWidth(250)
 
+    def start_pyro_countdown(self):
+        self.pyro_activate_timer.start(3000)
+
+    def enable_pyro_control(self):
+        if self.pyro_enabled:
+            if self.pyro_activate_timer.isActive():
+                self.pyro_activate_timer.stop()
+            self.pyro_enabled = False
+            self.pyro_fire_button.setDisabled(True)
+        else:
+            self.pyro_enabled = True
+            self.pyro_fire_button.setDisabled(False)
+            self.enable_pyro_control_button.setText("Disable pyro control")
+
+    
+
     def cameraOn(self):
         self.pyro_control_callback(CAMERA_ON)
     def cameraOff(self):
         self.pyro_control_callback(CAMERA_OFF)
+
+    def activatePyro(self):
+        self.pyro_control_callback(12)
+
 
     def zeroMotor1(self):
         current_degrees = motor_inches_to_absolute_degrees(self.motor1Position, 0)
@@ -289,11 +323,6 @@ class MainWindow(QMainWindow):
 
         motor_val = 0
         receive_packet(ser)
-        print("looping!")
-        motor_val += 1
-        if time.time() - self.last_sent_time > 2:
-                send_pyro_command(ser)
-                self.last_sent_time = time.time()
         self.motorcontrol.update()
         time.sleep(0.05)  # Short delay to avoid excessive CPU usage
 
